@@ -1,10 +1,10 @@
 module Lib where
 
-import Text.ParserCombinators.Parsec
-import Text.Parsec
-import Text.Parsec.Token
-import Text.Parsec.Language
-import Data.Char
+import           Data.Char
+import           Text.Parsec
+import           Text.Parsec.Language
+import           Text.Parsec.Token
+import           Text.ParserCombinators.Parsec
 
 data OpCode = MOV | XCHG | LEA | PUSH | POP
             | PUSHF | POPF | XLAT | ADD | ADC
@@ -244,18 +244,19 @@ parseOp = (OPR16 <$> parseReg16) <|> (OPR8 <$> parseReg8)
 parseStmt = do
     instr <- parseInstr
     let ari = lookup instr arity
-    operands <- commaSep1 lexer parseOp <* Lib.whiteSpace
     case ari of
         Just 0 -> return $ I0 instr
-        Just 1 -> return $ I1 instr (head operands)
-        Just 2 -> return $ I2 instr (head operands) (head . tail $ operands)
+        Just 1 -> do operands <- commaSep1 lexer parseOp <* Lib.whiteSpace
+                     return $ I1 instr (head operands)
+        Just 2 -> do operands <- commaSep1 lexer parseOp <* Lib.whiteSpace
+                     return $ I2 instr (head operands) (head . tail $ operands)
         _      -> error ""
 
 data Clocks a = !a :+ !a
     deriving (Eq, Show, Read)
 
 clocks :: Clocks a -> a
-clocks (x :+ _) = x
+clocks (x :+ _) = x -- TODO
 
 ea :: Clocks a -> a
 ea (_ :+ y) = y
