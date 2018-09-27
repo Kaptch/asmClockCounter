@@ -38,8 +38,7 @@ data Reg = Reg16 Reg16 | Reg8 Reg8 | SegReg SegReg | PointerReg PointerReg
 newtype MemoryVar = MemVar String
     deriving (Show, Eq)
 
-data Oper = OPR16 Reg16 | OPR8 Reg8 | OPSR SegReg
-          | OPPR PointerReg | OPM MemoryVar | OPI Integer
+data Oper = OPR Reg | OPM MemoryVar | OPI Integer
     deriving (Show, Eq)
 
 data Instr = I0 OpCode
@@ -239,11 +238,12 @@ parsePointerReg = foldl1 (<|>) (map f idToPointerRegTable)
     where
         f (name, proxy) = reserved lexer name >> return proxy
 
+parseReg = OPR <$> ((Reg16 <$> parseReg16) <|> (Reg8 <$> parseReg8)
+        <|> (SegReg <$> parseSegReg) <|> (PointerReg <$> parsePointerReg))
+
 parseMem = Lib.identifier
 
-parseOp = (OPR16 <$> parseReg16) <|> (OPR8 <$> parseReg8)
-       <|> (OPSR <$> parseSegReg) <|> (OPPR <$> parsePointerReg)
-       <|> (OPM . MemVar <$> parseMem) <|> (OPI <$> Lib.integer)
+parseOp = parseReg <|> (OPM . MemVar <$> parseMem) <|> (OPI <$> Lib.integer)
 
 parseStmt = do
     Lib.whiteSpace
@@ -305,8 +305,9 @@ instance Num a => Semigroup (Clocks a) where
 
 clocksMap :: Instr -> Clocks Int
 clocksMap instr = case instr of
-  I2 MOV (OPM _) (OPR16 AX) -> 10 :+ 0
-  I2 MOV (OPR16 AX) (OPM _) -> 10 :+ 0
+  I2 MOV (OPM _) (OPR (Reg16 AX)) -> 10 :+ 0
+  I2 MOV (OPR (Reg16 AX)) (OPM _) -> 10 :+ 0
+  I2 MOV (OPR _) (OPR _) -> 2 :+ 0
 
 countClocks :: [Instr] -> Clocks Int
 countClocks = foldr fun (0 :+ 0)
