@@ -246,6 +246,7 @@ parseOp = (OPR16 <$> parseReg16) <|> (OPR8 <$> parseReg8)
        <|> (OPM . MemVar <$> parseMem) <|> (OPI <$> Lib.integer)
 
 parseStmt = do
+    Lib.whiteSpace
     instr <- parseInstr
     let ari = lookup instr arity
     case ari of
@@ -256,8 +257,36 @@ parseStmt = do
                      return $ I2 instr (head operands) (head . tail $ operands)
         _      -> error ""
 
+-- in order to work with data one needs to parse them and
+-- add to some kind of State [(Ident, Value)]
+escape :: Parser String
+escape = do
+    d <- char '\\'
+    c <- oneOf "\\\"0nrvtbf" -- all the characters which can be escaped
+    return [d, c]
+
+nonEscape :: Parser Char
+nonEscape = noneOf "\\\"\0\n\r\v\t\b\f"
+
+character :: Parser String
+character = fmap return nonEscape <|> escape
+
+parseString :: Parser String
+parseString = do
+    start <- character -- to avoid applying many to empty parser
+    strings <- many character
+    newline
+    return $ concat strings
+
 parseFile = do
+    Lib.whiteSpace
+    string ".SECT .TEXT"
+    newline
     result <- many parseStmt
+    Lib.whiteSpace
+    string ".SECT .DATA" <|> string ".SECT .BSS"
+    optional newline
+    many parseString
     eof
     return result
 
