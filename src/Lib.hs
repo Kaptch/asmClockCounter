@@ -5,6 +5,7 @@ import           Text.Parsec
 import           Text.Parsec.Language
 import           Text.Parsec.Token
 import           Text.ParserCombinators.Parsec
+import           Text.Parsec.String
 
 data OpCode = MOV | XCHG | LEA | PUSH | POP
             | PUSHF | POPF | XLAT | ADD | ADC
@@ -30,6 +31,9 @@ data SegReg = CS | DS | SS | ES
 
 data PointerReg = SP | BP | SI | DI
     deriving (Show, Eq, Enum, Bounded)
+
+data Reg = Reg16 Reg16 | Reg8 Reg8 | SegReg SegReg | PointerReg PointerReg
+    deriving (Show, Eq)
 
 newtype MemoryVar = MemVar String
     deriving (Show, Eq)
@@ -252,6 +256,11 @@ parseStmt = do
                      return $ I2 instr (head operands) (head . tail $ operands)
         _      -> error ""
 
+parseFile = do
+    result <- many parseStmt
+    eof
+    return result
+
 data Clocks a = !a :+ !a
     deriving (Eq, Show, Read)
 
@@ -263,3 +272,17 @@ ea (_ :+ y) = y
 
 instance Num a => Semigroup (Clocks a) where
     (x1 :+ y1) <> (x2 :+ y2) = (x1 + x2) :+ (y1 + y2)
+
+clocksMap :: Instr -> Clocks Int
+clocksMap instr = case instr of
+  I2 MOV (OPM _) (OPR16 AX) -> 10 :+ 0
+  I2 MOV (OPR16 AX) (OPM _) -> 10 :+ 0
+
+countClocks :: [Instr] -> Clocks Int
+countClocks = foldr fun (0 :+ 0)
+  where
+    fun val acc = acc <> clocksMap val
+
+countClocksFromParsedFile fn = do
+  cont <- parseFromFile parseFile fn
+  return $ countClocks <$> cont
