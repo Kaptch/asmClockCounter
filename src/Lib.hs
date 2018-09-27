@@ -284,9 +284,10 @@ parseFile = do
     newline
     result <- many parseStmt
     Lib.whiteSpace
-    string ".SECT .DATA" <|> string ".SECT .BSS"
+    optional $ string ".SECT .DATA" <|> string ".SECT .BSS"
     optional newline
     many parseString
+    Lib.whiteSpace
     eof
     return result
 
