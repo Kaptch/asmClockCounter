@@ -292,13 +292,10 @@ parseFile = do
     return result
 
 data Clocks a = !a :+ !a
-    deriving (Eq, Show, Read)
+    deriving (Eq, Read)
 
-clocks :: Clocks a -> a
-clocks (x :+ _) = x -- TODO
-
-ea :: Clocks a -> a
-ea (_ :+ y) = y
+instance Show a => Show (Clocks a) where
+    show (x :+ y) = show x ++ " + " ++ show y ++ "EA"
 
 instance Num a => Semigroup (Clocks a) where
     (x1 :+ y1) <> (x2 :+ y2) = (x1 + x2) :+ (y1 + y2)
@@ -308,6 +305,8 @@ clocksMap instr = case instr of
   I2 MOV (OPM _) (OPR (Reg16 AX)) -> 10 :+ 0
   I2 MOV (OPR (Reg16 AX)) (OPM _) -> 10 :+ 0
   I2 MOV (OPR _) (OPR _) -> 2 :+ 0
+  -- TODO
+  _ -> error "wrong arguments"
 
 countClocks :: [Instr] -> Clocks Int
 countClocks = foldr fun (0 :+ 0)
