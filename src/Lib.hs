@@ -3,9 +3,9 @@ module Lib where
 import           Data.Char
 import           Text.Parsec
 import           Text.Parsec.Language
+import           Text.Parsec.String
 import           Text.Parsec.Token
 import           Text.ParserCombinators.Parsec
-import           Text.Parsec.String
 
 data OpCode = MOV | XCHG | LEA | PUSH | POP
             | PUSHF | POPF | XLAT | ADD | ADC
@@ -34,6 +34,36 @@ data PointerReg = SP | BP | SI | DI
 
 data Reg = Reg16 Reg16 | Reg8 Reg8 | SegReg SegReg | PointerReg PointerReg
     deriving (Show, Eq)
+
+-- TODO: Context sensitive parsing with lookup at DATA and BSS sections
+{-
+data Immed8 = Immed8 Int
+    deriving (Show, Eq)
+
+data Immediate = Immediate Int | Immed8 Immed8
+    deriving (Show, Eq)
+
+data Mem8 = Mem8 String
+    deriving (Show, Eq)
+
+data Mem16 = Mem16 String
+    deriving (Show, Eq)
+
+data Memory = Mem8 Mem8 | Mem16 Mem16
+    deriving (Show, Eq)
+
+newtype Label = String
+    deriving (Show, Eq)
+
+type Identifier = String
+
+data Type = Byte | Word | ASCII
+    deriving (Show, Eq)
+
+type LookupTable = Data.Map.Strict Identifier Type
+
+type LookupParser s m a = ParsecT s LookupTable m a
+-}
 
 newtype MemoryVar = MemVar String
     deriving (Show, Eq)
@@ -302,11 +332,52 @@ instance Num a => Semigroup (Clocks a) where
 
 clocksMap :: Instr -> Clocks Int
 clocksMap instr = case instr of
-  I2 MOV (OPM _) (OPR (Reg16 AX)) -> 10 :+ 0
-  I2 MOV (OPR (Reg16 AX)) (OPM _) -> 10 :+ 0
-  I2 MOV (OPR _) (OPR _) -> 2 :+ 0
-  -- TODO
-  _ -> error "wrong arguments"
+  -- MOV
+  I2 MOV (OPM _) (OPR (Reg16 AX))          -> 10 :+ 0
+  I2 MOV (OPM _) (OPR (Reg8 AL))           -> 10 :+ 0
+  I2 MOV (OPR (Reg16 AX)) (OPM _)          -> 10 :+ 0
+  I2 MOV (OPR (Reg8 AL)) (OPM _)           -> 10 :+ 0
+  I2 MOV (OPR (SegReg _)) (OPR (Reg16 _))  -> 2 :+ 0
+  I2 MOV (OPR (SegReg _)) (OPM _)          -> 8 :+ 1
+  I2 MOV (OPR (Reg16 _)) (OPR (SegReg _))  -> 2 :+ 0
+  I2 MOV (OPM _) (OPR (SegReg _))          -> 9 :+ 1
+  I2 MOV (OPR _) (OPR _)                   -> 2 :+ 0
+  I2 MOV (OPR _) (OPM _)                   -> 8 :+ 1
+  I2 MOV (OPM _) (OPR _)                   -> 9 :+ 1
+  I2 MOV (OPR _) (OPI _)                   -> 4 :+ 0
+  I2 MOV (OPM _) (OPI _)                   -> 10 :+ 1
+  -- XCHG
+  I2 XCHG (OPR (Reg8 AL)) (OPR (Reg16 _))  -> 3 :+ 0
+  I2 XCHG (OPR (Reg16 AX)) (OPR (Reg16 _)) -> 3 :+ 0
+  I2 XCHG (OPM _) (OPR _)                  -> 17 :+ 1
+  I2 XCHG (OPR _) (OPR _)                  -> 4 :+ 0
+  -- LEA
+  I2 LEA (OPR (Reg16 _)) (OPM _)           -> 2 :+ 1
+  -- PUSH
+  I1 PUSH (OPR (SegReg _))                 -> 10 :+ 0
+  I1 PUSH (OPR _)                          -> 11 :+ 0
+  I1 PUSH (OPM _)                          -> 16 :+ 1
+  -- POP
+  I1 POP (OPR (SegReg _))                  -> 8 :+ 0
+  I1 POP (OPR _)                           -> 8 :+ 0
+  I1 POP (OPM _)                           -> 17 :+ 1
+  -- PUSHF
+  I0 PUSHF                                 -> 10 :+ 0
+  -- POPF
+  I0 POPF                                  -> 8 :+ 0
+  -- XLAT
+  I1 XLAT (OPM _)                          -> 11 :+ 0
+  -- ADD
+  I2 ADD (OPR (Reg8 AL)) (OPI _)           -> 4 :+ 0
+  I2 ADD (OPR (Reg16 AX)) (OPI _)          -> 4 :+ 0
+  I2 ADD (OPM _) (OPI _)                   -> 17 :+ 1
+  I2 ADD (OPR _) (OPI _)                   -> 4 :+ 0
+  I2 ADD (OPM _) (OPR _)                   -> 16 :+ 1
+  I2 ADD (OPR _) (OPM _)                   -> 9 :+ 1
+  I2 ADD (OPR _) (OPR _)                   -> 3 :+ 0
+  -- ADC
+
+  _                                        -> error "wrong arguments"
 
 countClocks :: [Instr] -> Clocks Int
 countClocks = foldr fun (0 :+ 0)
