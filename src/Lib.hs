@@ -376,7 +376,176 @@ clocksMap instr = case instr of
   I2 ADD (OPR _) (OPM _)                   -> 9 :+ 1
   I2 ADD (OPR _) (OPR _)                   -> 3 :+ 0
   -- ADC
-
+  I2 ADC (OPR (Reg8 AL)) (OPI _)           -> 4 :+ 0
+  I2 ADC (OPR (Reg16 AX)) (OPI _)          -> 4 :+ 0
+  I2 ADC (OPM _) (OPI _)                   -> 17 :+ 1
+  I2 ADC (OPR _) (OPI _)                   -> 4 :+ 0
+  I2 ADC (OPM _) (OPR _)                   -> 16 :+ 1
+  I2 ADC (OPR _) (OPM _)                   -> 9 :+ 1
+  I2 ADC (OPR _) (OPR _)                   -> 3 :+ 0
+  -- SUB
+  I2 SUB (OPR (Reg8 AL)) (OPI _)           -> 4 :+ 0
+  I2 SUB (OPR (Reg16 AX)) (OPI _)          -> 4 :+ 0
+  I2 SUB (OPR _) (OPI _)                   -> 4 :+ 0
+  I2 SUB (OPM _) (OPI _)                   -> 17 :+ 1
+  I2 SUB (OPR _) (OPR _)                   -> 3 :+ 0
+  I2 SUB (OPR _) (OPM _)                   -> 9 :+ 1
+  I2 SUB (OPM _) (OPR _)                   -> 16 :+ 1
+  -- SBB
+  I2 SBB (OPR (Reg8 AL)) (OPI _)           -> 4 :+ 0
+  I2 SBB (OPR (Reg16 AX)) (OPI _)          -> 4 :+ 0
+  I2 SBB (OPR _) (OPI _)                   -> 4 :+ 0
+  I2 SBB (OPM _) (OPI _)                   -> 17 :+ 1
+  I2 SBB (OPM _) (OPR _)                   -> 16 :+ 1
+  I2 SBB (OPR _) (OPM _)                   -> 9 :+ 1
+  I2 SBB (OPR _) (OPR _)                   -> 3 :+ 0
+  -- IMUL
+  I1 IMUL (OPR (Reg8 _))                   -> 80 :+ 0
+  I1 IMUL (OPR (Reg16 _))                  -> 128 :+ 0
+  I1 IMUL (OPM _)                          -> 86 :+ 1
+  -- MUL
+  I1 MUL (OPR (Reg8 _))                    -> 70 :+ 0
+  I1 MUL (OPR (Reg16 _))                   -> 118 :+ 0
+  I1 MUL (OPM _)                           -> 76 :+ 1
+  -- IDIV
+  I1 IDIV (OPR (Reg8 _))                   -> 101 :+ 0
+  I1 IDIV (OPR (Reg16 _))                  -> 165 :+ 0
+  I1 IDIV (OPM _)                          -> 107 :+ 1
+  -- DIV
+  I1 DIV (OPR (Reg8 _))                    -> 80 :+ 0
+  I1 DIV (OPR (Reg16 _))                   -> 144 :+ 0
+  I1 DIV (OPM _)                           -> 86 :+ 1
+  -- CBW
+  I0 CBW                                   -> 2 :+ 0
+  -- CWD
+  I0 CWD                                   -> 5 :+ 0
+  -- NEG
+  I1 NEG (OPR _)                           -> 3 :+ 0
+  I1 NEG (OPM _)                           -> 16 :+ 1
+  -- NOT
+  I1 NOT (OPR _)                           -> 3 :+ 0
+  I1 NOT (OPM _)                           -> 16 :+ 1
+  -- INC
+  I1 INC (OPR (Reg8 _))                    -> 3 :+ 0
+  I1 INC (OPR (Reg16 _))                   -> 2 :+ 0
+  I1 INC (OPM _)                           -> 15 :+ 1
+  -- DEC
+  I1 DEC (OPR (Reg8 _))                    -> 3 :+ 0
+  I1 DEC (OPR (Reg16 _))                   -> 2 :+ 0
+  I1 DEC (OPM _)                           -> 15 :+ 1
+  -- AND
+  I2 AND (OPR (Reg8 AL)) (OPI _)           -> 4 :+ 0
+  I2 AND (OPR (Reg16 AX)) (OPI _)          -> 4 :+ 0
+  I2 AND (OPM _) (OPI _)                   -> 17 :+ 1
+  I2 AND (OPR _) (OPI _)                   -> 4 :+ 0
+  I2 AND (OPM _) (OPR _)                   -> 16 :+ 1
+  I2 AND (OPR _) (OPM _)                   -> 9 :+ 1
+  I2 AND (OPR _) (OPR _)                   -> 3 :+ 0
+  -- OR
+  I2 OR (OPR (Reg8 AL)) (OPI _)            -> 4 :+ 0
+  I2 OR (OPR (Reg16 AX)) (OPI _)           -> 4 :+ 0
+  I2 OR (OPM _) (OPI _)                    -> 17 :+ 1
+  I2 OR (OPR _) (OPI _)                    -> 4 :+ 0
+  I2 OR (OPM _) (OPR _)                    -> 16 :+ 1
+  I2 OR (OPR _) (OPM _)                    -> 9 :+ 1
+  I2 OR (OPR _) (OPR _)                    -> 3 :+ 0
+  -- XOR
+  I2 XOR (OPR (Reg8 AL)) (OPI _)           -> 4 :+ 0
+  I2 XOR (OPR (Reg16 AX)) (OPI _)          -> 4 :+ 0
+  I2 XOR (OPM _) (OPI _)                   -> 17 :+ 1
+  I2 XOR (OPR _) (OPI _)                   -> 4 :+ 0
+  I2 XOR (OPM _) (OPR _)                   -> 16 :+ 1
+  I2 XOR (OPR _) (OPM _)                   -> 9 :+ 1
+  I2 XOR (OPR _) (OPR _)                   -> 3 :+ 0
+  -- SHR
+  I2 SHR (OPR _) (OPI 1)                   -> 2 :+ 0
+  I2 SHR (OPR _) (OPR (Reg8 CL))           -> 8 :+ 0
+  I2 SHR (OPM _) (OPI 1)                   -> 15 :+ 1
+  I2 SHR (OPM _) (OPR (Reg8 CL))           -> 20 :+ 1
+  -- SAR
+  I2 SAR (OPR _) (OPI 1)                   -> 2 :+ 0
+  I2 SAR (OPR _) (OPR (Reg8 CL))           -> 8 :+ 0
+  I2 SAR (OPM _) (OPI 1)                   -> 15 :+ 1
+  I2 SAR (OPM _) (OPR (Reg8 CL))           -> 20 :+ 1
+  -- SHL
+  I2 SHL (OPR _) (OPI 1)                   -> 2 :+ 0
+  I2 SHL (OPR _) (OPR (Reg8 CL))           -> 8 :+ 0
+  I2 SHL (OPM _) (OPI 1)                   -> 15 :+ 1
+  I2 SHL (OPM _) (OPR (Reg8 CL))           -> 20 :+ 1
+  -- ROL
+  I2 ROL (OPR _) (OPI 1)                   -> 2 :+ 0
+  I2 ROL (OPR _) (OPR (Reg8 CL))           -> 8 :+ 0
+  I2 ROL (OPM _) (OPI 1)                   -> 15 :+ 1
+  I2 ROL (OPM _) (OPR (Reg8 CL))           -> 20 :+ 1
+  -- ROR
+  I2 ROR (OPR _) (OPI 1)                   -> 2 :+ 0
+  I2 ROR (OPR _) (OPR (Reg8 CL))           -> 8 :+ 0
+  I2 ROR (OPM _) (OPI 1)                   -> 15 :+ 1
+  I2 ROR (OPM _) (OPR (Reg8 CL))           -> 20 :+ 1
+  -- RCL
+  I2 RCL (OPR _) (OPI 1)                   -> 2 :+ 0
+  I2 RCL (OPR _) (OPR (Reg8 CL))           -> 8 :+ 0
+  I2 RCL (OPM _) (OPI 1)                   -> 15 :+ 1
+  I2 RCL (OPM _) (OPR (Reg8 CL))           -> 20 :+ 1
+  -- RCR
+  I2 RCR (OPR _) (OPI 1)                   -> 2 :+ 0
+  I2 RCR (OPR _) (OPR (Reg8 CL))           -> 8 :+ 0
+  I2 RCR (OPM _) (OPI 1)                   -> 15 :+ 1
+  I2 RCR (OPM _) (OPR (Reg8 CL))           -> 20 :+ 1
+  -- TEST
+  I2 TEST (OPR (Reg8 AL)) (OPI _)          -> 4 :+ 0
+  I2 TEST (OPR (Reg16 AX)) (OPI _)         -> 4 :+ 0
+  I2 TEST (OPM _) (OPI _)                  -> 11 :+ 1
+  I2 TEST (OPR _) (OPI _)                  -> 5 :+ 0
+  I2 TEST (OPR _) (OPM _)                  -> 9 :+ 1
+  I2 TEST (OPR _) (OPR _)                  -> 3 :+ 0
+  -- CMP
+  I2 CMP (OPR (Reg8 AL)) (OPI _)           -> 4 :+ 0
+  I2 CMP (OPR (Reg16 AX)) (OPI _)          -> 4 :+ 0
+  I2 CMP (OPM _) (OPI _)                   -> 10 :+ 1
+  I2 CMP (OPR _) (OPI _)                   -> 4 :+ 0
+  I2 CMP (OPM _) (OPR _)                   -> 9 :+ 1
+  I2 CMP (OPR _) (OPM _)                   -> 9 :+ 1
+  I2 CMP (OPR _) (OPR _)                   -> 3 :+ 0
+  -- STD
+  I0 STD                                   -> 2 :+ 0
+  -- CLD
+  I0 CLD                                   -> 2 :+ 0
+  -- STC
+  I0 STC                                   -> 2 :+ 0
+  -- CLC
+  I0 CLC                                   -> 2 :+ 0
+  -- CMC
+  I0 CMC                                   -> 2 :+ 0
+  -- LOOP
+  --I1 LOOP (OPM _) -> 17 :+ 0
+  -- LOOPZ
+  --I1 LOOPZ (OPM _) -> 18 :+ 0
+  -- LOOPNZ
+  --I1 LOOPNZ (OPM _) -> 19 :+ 0
+  -- REP
+  I0 REP                                   -> 2 :+ 0
+  -- MOVS
+  I2 MOVS (OPM _) (OPM _)                  -> 18 :+ 0
+  -- LODS
+  I1 LODS (OPM _)                          -> 12 :+ 0
+  -- STOS
+  I1 STOS (OPM _)                          -> 11 :+ 0
+  -- SCAS
+  I1 SCAS (OPM _)                          -> 15 :+ 0
+  -- CMPS
+  I2 CMPS (OPM _) (OPM _)                  -> 22 :+ 0
+  -- JCC
+  --skip
+  -- JMP
+  --skip
+  -- CALL
+  I1 CALL (OPR _)                          -> 16 :+ 0
+  I1 CALL (OPM _)                          -> 21 :+ 1
+  -- RET
+  --skip
+  -- SYS
+  --skip
   _                                        -> error "wrong arguments"
 
 countClocks :: [Instr] -> Clocks Int
