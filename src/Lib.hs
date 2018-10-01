@@ -6,6 +6,8 @@ import           Text.Parsec.Language
 import           Text.Parsec.String
 import           Text.Parsec.Token
 import           Text.ParserCombinators.Parsec
+import qualified Data.Map.Strict as Map
+import Data.Functor.Identity
 
 data OpCode = MOV | XCHG | LEA | PUSH | POP
             | PUSHF | POPF | XLAT | ADD | ADC
@@ -18,54 +20,39 @@ data OpCode = MOV | XCHG | LEA | PUSH | POP
             | LOOPNZ | REP
             | MOVS | LODS | STOS | SCAS | CMPS
             | JCC | JMP | CALL | RET | SYS
-            deriving (Show, Eq, Enum, Bounded)
+            deriving (Show, Eq)
 
 data Reg16 = AX | BX | CX | DX
-    deriving (Show, Eq, Enum, Bounded)
+    deriving (Show, Eq)
 
 data Reg8 = AH | AL | BH | BL | CH | CL | DH | DL
-    deriving (Show, Eq, Enum, Bounded)
+    deriving (Show, Eq)
 
 data SegReg = CS | DS | SS | ES
-    deriving (Show, Eq, Enum, Bounded)
+    deriving (Show, Eq)
 
 data PointerReg = SP | BP | SI | DI
-    deriving (Show, Eq, Enum, Bounded)
+    deriving (Show, Eq)
 
 data Reg = Reg16 Reg16 | Reg8 Reg8 | SegReg SegReg | PointerReg PointerReg
     deriving (Show, Eq)
 
--- TODO: Context sensitive parsing with lookup at DATA and BSS sections
-{-
-data Immed8 = Immed8 Int
-    deriving (Show, Eq)
-
-data Immediate = Immediate Int | Immed8 Immed8
-    deriving (Show, Eq)
-
-data Mem8 = Mem8 String
-    deriving (Show, Eq)
-
-data Mem16 = Mem16 String
-    deriving (Show, Eq)
-
-data Memory = Mem8 Mem8 | Mem16 Mem16
-    deriving (Show, Eq)
-
-newtype Label = String
-    deriving (Show, Eq)
-
-type Identifier = String
-
-data Type = Byte | Word | ASCII
-    deriving (Show, Eq)
-
-type LookupTable = Data.Map.Strict Identifier Type
-
-type LookupParser s m a = ParsecT s LookupTable m a
--}
-
 newtype MemoryVar = MemVar String
+    deriving (Show, Eq)
+
+newtype DirectAddressing = DirectAddressing Int
+    deriving (Show, Eq)
+
+newtype IndirectAddressing = IndirectAddressing Reg
+    deriving (Show, Eq)
+
+data RegisterOffsetAddressing = RegisterOffsetAddressing Int Reg
+    deriving (Show, Eq)
+
+data IndexRegisterAddressing = IndexRegisterAddressing Reg Reg
+    deriving (Show, Eq)
+
+data IndexRegisterOffsetAddressing = IndexRegisterOffsetAddressing Int Reg Reg
     deriving (Show, Eq)
 
 data Oper = OPR Reg | OPM MemoryVar | OPI Integer
@@ -75,6 +62,17 @@ data Instr = I0 OpCode
            | I1 OpCode Oper
            | I2 OpCode Oper Oper
     deriving (Show, Eq)
+
+type Identifier = String
+
+data Type = Byte | Word | ASCII
+    deriving (Show, Eq)
+
+typeTable =
+    [ ("BYTE", Byte)
+    , ("WORD", Word)
+    , ("ASCII", ASCII)
+    ]
 
 idToReg16Table =
     [ ("AX", AX)
@@ -228,8 +226,8 @@ arity =
 
 asmDef = emptyDef
     { commentLine = ";"
-    , identStart = letter <|> oneOf "()"
-    , identLetter = alphaNum <|> oneOf "()"
+    , identStart = letter
+    , identLetter = alphaNum
     , caseSensitive = False
     }
 
@@ -268,12 +266,53 @@ parsePointerReg = foldl1 (<|>) (map f idToPointerRegTable)
     where
         f (name, proxy) = reserved lexer name >> return proxy
 
-parseReg = OPR <$> ((Reg16 <$> parseReg16) <|> (Reg8 <$> parseReg8)
-        <|> (SegReg <$> parseSegReg) <|> (PointerReg <$> parsePointerReg))
+parseReg = (Reg16 <$> parseReg16) <|> (Reg8 <$> parseReg8)
+        <|> (SegReg <$> parseSegReg) <|> (PointerReg <$> parsePointerReg)
+
+parseType = foldl1 (<|>) (map f typeTable)
+    where
+        f (name, proxy) = reserved lexer name >> return proxy
+
+parseDataEntry = do
+    Lib.whiteSpace
+    ident <- manyTill anyChar (char ':')
+    Lib.whiteSpace
+    char '.'
+    tp <- parseType
+    Lib.whiteSpace
+    return (ident, tp)
+
+parseDataSection = do
+    Lib.whiteSpace
+    string ".SECT .DATA"
+    list <- parseDataEntry `sepBy` eol
+    Lib.whiteSpace
+    return $ Map.fromList list
+
+parseDirectAddressing :: ParsecT String () Identity DirectAddressing -- WTF?
+parseDirectAddressing = DirectAddressing <$> (read <$> Lib.parens (many digit))
+
+parseIndirectAddressing = IndirectAddressing <$> Lib.parens parseReg
+
+parseRegisterOffsetAddressing = do
+    offset <- many digit
+    address <- Lib.parens parseReg
+    return $ RegisterOffsetAddressing (read offset) address
+
+parseIndexRegisterAddressing = do
+    index <- Lib.parens parseReg
+    address <- Lib.parens parseReg
+    return $ IndexRegisterAddressing index address
+
+parseIndexRegisterOffsetAddressing = do
+    offset <- many digit
+    index <- Lib.parens parseReg
+    address <- Lib.parens parseReg
+    return $ IndexRegisterOffsetAddressing (read offset) index address
 
 parseMem = Lib.identifier
 
-parseOp = parseReg <|> (OPM . MemVar <$> parseMem) <|> (OPI <$> Lib.integer)
+parseOp = (OPR <$> parseReg) <|> (OPM . MemVar <$> parseMem) <|> (OPI <$> Lib.integer)
 
 parseStmt = do
     Lib.whiteSpace
@@ -314,8 +353,9 @@ parseFile = do
     newline
     result <- many parseStmt
     Lib.whiteSpace
-    optional $ string ".SECT .DATA" <|> string ".SECT .BSS"
-    optional newline
+    optional parseDataSection
+    Lib.whiteSpace
+    optional $ string ".SECT .BSS"
     many parseString
     Lib.whiteSpace
     eof
