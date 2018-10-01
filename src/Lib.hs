@@ -1,13 +1,13 @@
 module Lib where
 
 import           Data.Char
+import           Data.Functor.Identity
+import qualified Data.Map.Strict               as Map
 import           Text.Parsec
 import           Text.Parsec.Language
 import           Text.Parsec.String
 import           Text.Parsec.Token
 import           Text.ParserCombinators.Parsec
-import qualified Data.Map.Strict as Map
-import Data.Functor.Identity
 
 data OpCode = MOV | XCHG | LEA | PUSH | POP
             | PUSHF | POPF | XLAT | ADD | ADC
