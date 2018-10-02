@@ -40,7 +40,7 @@ data Reg = Reg16 Reg16 | Reg8 Reg8 | SegReg SegReg | PointerReg PointerReg
 newtype MemoryVar = MemVar String
     deriving (Show, Eq)
 
-newtype DirectAddressing = DirectAddressing Int
+newtype DirectAddressing = DirectAddressing String
     deriving (Show, Eq)
 
 newtype IndirectAddressing = IndirectAddressing Reg
@@ -55,24 +55,17 @@ data IndexRegisterAddressing = IndexRegisterAddressing Reg Reg
 data IndexRegisterOffsetAddressing = IndexRegisterOffsetAddressing Int Reg Reg
     deriving (Show, Eq)
 
-data Oper = OPR Reg | OPM MemoryVar | OPI Integer
+data Memory = DA DirectAddressing | IA IndirectAddressing | ROA RegisterOffsetAddressing
+            | IRA IndexRegisterAddressing | IROA IndexRegisterOffsetAddressing
+    deriving (Show, Eq)
+
+data Oper = OPR Reg | OPM Memory | OPI Integer
     deriving (Show, Eq)
 
 data Instr = I0 OpCode
            | I1 OpCode Oper
            | I2 OpCode Oper Oper
     deriving (Show, Eq)
-
-type Identifier = String
-
-data Type = Byte | Word | ASCII
-    deriving (Show, Eq)
-
-typeTable =
-    [ ("BYTE", Byte)
-    , ("WORD", Word)
-    , ("ASCII", ASCII)
-    ]
 
 idToReg16Table =
     [ ("AX", AX)
@@ -226,7 +219,7 @@ arity =
 
 asmDef = emptyDef
     { commentLine = ";"
-    , identStart = letter
+    , identStart = alphaNum
     , identLetter = alphaNum
     , caseSensitive = False
     }
@@ -269,28 +262,12 @@ parsePointerReg = foldl1 (<|>) (map f idToPointerRegTable)
 parseReg = (Reg16 <$> parseReg16) <|> (Reg8 <$> parseReg8)
         <|> (SegReg <$> parseSegReg) <|> (PointerReg <$> parsePointerReg)
 
-parseType = foldl1 (<|>) (map f typeTable)
-    where
-        f (name, proxy) = reserved lexer name >> return proxy
-
-parseDataEntry = do
-    Lib.whiteSpace
-    ident <- manyTill anyChar (char ':')
-    Lib.whiteSpace
-    char '.'
-    tp <- parseType
-    Lib.whiteSpace
-    return (ident, tp)
-
-parseDataSection = do
-    Lib.whiteSpace
-    string ".SECT .DATA"
-    list <- parseDataEntry `sepBy` eol
-    Lib.whiteSpace
-    return $ Map.fromList list
+appendBrackets str = "(" ++ str ++ ")"
 
 parseDirectAddressing :: ParsecT String () Identity DirectAddressing -- WTF?
-parseDirectAddressing = DirectAddressing <$> (read <$> Lib.parens (many digit))
+parseDirectAddressing = do
+    str <- Lib.identifier <|> (appendBrackets <$> Lib.parens Lib.identifier)
+    return $ DirectAddressing str
 
 parseIndirectAddressing = IndirectAddressing <$> Lib.parens parseReg
 
@@ -310,9 +287,13 @@ parseIndexRegisterOffsetAddressing = do
     address <- Lib.parens parseReg
     return $ IndexRegisterOffsetAddressing (read offset) index address
 
-parseMem = Lib.identifier
+parseMemory = (IRA <$> Text.Parsec.try parseIndexRegisterAddressing)
+           <|> (IROA <$> Text.Parsec.try parseIndexRegisterOffsetAddressing)
+           <|> (IA <$> Text.Parsec.try parseIndirectAddressing)
+           <|> (ROA <$> Text.Parsec.try parseRegisterOffsetAddressing)
+           <|> (DA <$> Text.Parsec.try parseDirectAddressing)
 
-parseOp = (OPR <$> parseReg) <|> (OPM . MemVar <$> parseMem) <|> (OPI <$> Lib.integer)
+parseOp = (OPR <$> parseReg) <|> (OPM <$> parseMemory) <|> (OPI <$> Lib.integer)
 
 parseStmt = do
     Lib.whiteSpace
@@ -326,40 +307,12 @@ parseStmt = do
                      return $ I2 instr (head operands) (head . tail $ operands)
         _      -> error ""
 
--- in order to work with data one needs to parse them and
--- add to some kind of State [(Ident, Value)]
-escape :: Parser String
-escape = do
-    d <- char '\\'
-    c <- oneOf "\\\"0nrvtbf" -- all the characters which can be escaped
-    return [d, c]
-
-nonEscape :: Parser Char
-nonEscape = noneOf "\\\"\0\n\r\v\t\b\f"
-
-character :: Parser String
-character = fmap return nonEscape <|> escape
-
-parseString :: Parser String
-parseString = do
-    start <- character -- to avoid applying many to empty parser
-    strings <- many character
-    newline
-    return $ concat strings
-
 parseFile = do
     Lib.whiteSpace
     string ".SECT .TEXT"
     newline
-    result <- many parseStmt
     Lib.whiteSpace
-    optional parseDataSection
-    Lib.whiteSpace
-    optional $ string ".SECT .BSS"
-    many parseString
-    Lib.whiteSpace
-    eof
-    return result
+    many parseStmt
 
 data Clocks a = !a :+ !a
     deriving (Eq, Read)
