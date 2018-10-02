@@ -1,9 +1,9 @@
 .SECT .TEXT
-    mov ax, 4
-    mov x, ax
-    mov bx, x
+        MOV     AX, (x)
+        ADD     AX, (y)
+
 .SECT .DATA
-x:  .WORD   42
-y:  .WORD   25
+x:     .WORD    2
+y:     .WORD    3
+
 .SECT .BSS
-ans:    .SPACE  2
