@@ -46,13 +46,13 @@ newtype DirectAddressing = DirectAddressing String
 newtype IndirectAddressing = IndirectAddressing Reg
     deriving (Show, Eq)
 
-data RegisterOffsetAddressing = RegisterOffsetAddressing Int Reg
+data RegisterOffsetAddressing = RegisterOffsetAddressing Integer Reg
     deriving (Show, Eq)
 
 data IndexRegisterAddressing = IndexRegisterAddressing Reg Reg
     deriving (Show, Eq)
 
-data IndexRegisterOffsetAddressing = IndexRegisterOffsetAddressing Int Reg Reg
+data IndexRegisterOffsetAddressing = IndexRegisterOffsetAddressing Integer Reg Reg
     deriving (Show, Eq)
 
 data Memory = DA DirectAddressing | IA IndirectAddressing | ROA RegisterOffsetAddressing
@@ -219,13 +219,10 @@ arity =
 
 asmDef = emptyDef
     { commentLine = ";"
-    , identStart = alphaNum
-    , identLetter = alphaNum
+    , identStart = letter
+    , identLetter = alphaNum <|> oneOf "+-"
     , caseSensitive = False
     }
-
-eol :: GenParser Char st Char
-eol = char '\n'
 
 lexer = makeTokenParser asmDef
 identifier = Text.Parsec.Token.identifier lexer -- parses an identifier
@@ -266,14 +263,15 @@ appendBrackets str = "(" ++ str ++ ")"
 
 parseDirectAddressing = do
     str <- Lib.identifier <|> (appendBrackets <$> Lib.parens Lib.identifier)
+                          <|> (appendBrackets <$> (show <$> Lib.parens Lib.integer))
     return $ DirectAddressing str
 
 parseIndirectAddressing = IndirectAddressing <$> Lib.parens parseReg
 
 parseRegisterOffsetAddressing = do
-    offset <- many digit
+    offset <- Lib.integer
     address <- Lib.parens parseReg
-    return $ RegisterOffsetAddressing (read offset) address
+    return $ RegisterOffsetAddressing offset address
 
 parseIndexRegisterAddressing = do
     index <- Lib.parens parseReg
@@ -281,10 +279,10 @@ parseIndexRegisterAddressing = do
     return $ IndexRegisterAddressing index address
 
 parseIndexRegisterOffsetAddressing = do
-    offset <- many digit
+    offset <- Lib.integer
     index <- Lib.parens parseReg
     address <- Lib.parens parseReg
-    return $ IndexRegisterOffsetAddressing (read offset) index address
+    return $ IndexRegisterOffsetAddressing offset index address
 
 parseMemory = (IRA <$> Text.Parsec.try parseIndexRegisterAddressing)
            <|> (IROA <$> Text.Parsec.try parseIndexRegisterOffsetAddressing)
