@@ -264,7 +264,6 @@ parseReg = (Reg16 <$> parseReg16) <|> (Reg8 <$> parseReg8)
 
 appendBrackets str = "(" ++ str ++ ")"
 
-parseDirectAddressing :: ParsecT String () Identity DirectAddressing -- WTF?
 parseDirectAddressing = do
     str <- Lib.identifier <|> (appendBrackets <$> Lib.parens Lib.identifier)
     return $ DirectAddressing str
