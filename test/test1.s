@@ -2,7 +2,9 @@
         MOV     AX, (x)
         ADD     AX, (y)
         MOV     SI, arr
-        add     AX, (SI)
+        add     si, 3
+        add     cx, (arr+2)
+        add     AX, -2(SI)
 .SECT .DATA
 x:     .WORD    2
 y:     .WORD    3
