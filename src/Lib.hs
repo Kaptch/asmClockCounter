@@ -22,7 +22,10 @@ data OpCode = MOV | XCHG | LEA | PUSH | POP
             | JCC | JMP | CALL | RET | SYS
             deriving (Show, Eq)
 
-data Reg16 = AX | BX | CX | DX
+data GeneralReg = AX | BX | CX | DX
+    deriving (Show, Eq)
+
+data Reg16 = GR GeneralReg | SR SegReg | PR PointerReg
     deriving (Show, Eq)
 
 data Reg8 = AH | AL | BH | BL | CH | CL | DH | DL
@@ -34,7 +37,7 @@ data SegReg = CS | DS | SS | ES
 data PointerReg = SP | BP | SI | DI
     deriving (Show, Eq)
 
-data Reg = Reg16 Reg16 | Reg8 Reg8 | SegReg SegReg | PointerReg PointerReg
+data Reg = Reg16 Reg16 | Reg8 Reg8
     deriving (Show, Eq)
 
 newtype MemoryVar = MemVar String
@@ -256,8 +259,8 @@ parsePointerReg = foldl1 (<|>) (map f idToPointerRegTable)
     where
         f (name, proxy) = reserved lexer name >> return proxy
 
-parseReg = (Reg16 <$> parseReg16) <|> (Reg8 <$> parseReg8)
-        <|> (SegReg <$> parseSegReg) <|> (PointerReg <$> parsePointerReg)
+parseReg = (Reg16 . GR <$> parseReg16) <|> (Reg8 <$> parseReg8)
+        <|> (Reg16 . SR <$> parseSegReg) <|> (Reg16 . PR <$> parsePointerReg)
 
 appendBrackets str = "(" ++ str ++ ")"
 
@@ -311,202 +314,224 @@ parseFile = do
     Lib.whiteSpace
     many parseStmt
 
-data Clocks a = !a :+ !a
-    deriving (Eq, Read)
+{- DA DirectAddressing | IA IndirectAddressing | ROA RegisterOffsetAddressing
+            | IRA IndexRegisterAddressing | IROA IndexRegisterOffsetAddressing
 
-instance Show a => Show (Clocks a) where
-    show (x :+ y) = show x ++ " + " ++ show y ++ "EA"
+            newtype DirectAddressing = DirectAddressing String
+                deriving (Show, Eq)
 
-instance Num a => Semigroup (Clocks a) where
-    (x1 :+ y1) <> (x2 :+ y2) = (x1 + x2) :+ (y1 + y2)
+            newtype IndirectAddressing = IndirectAddressing Reg
+                deriving (Show, Eq)
 
-clocksMap :: Instr -> Clocks Int
+            data RegisterOffsetAddressing = RegisterOffsetAddressing Integer Reg
+                deriving (Show, Eq)
+
+            data IndexRegisterAddressing = IndexRegisterAddressing Reg Reg
+                deriving (Show, Eq)
+
+            data IndexRegisterOffsetAddressing = IndexRegisterOffsetAddressing Integer Reg Reg
+                deriving (Show, Eq)
+          -}
+ea a = case a of
+  (DA _) -> 6
+  (IA _) -> 5
+  (ROA _) -> 9
+  (IRA (IndexRegisterAddressing (Reg16 (PR BP)) (Reg16 (PR DI)))) -> 7
+  (IRA (IndexRegisterAddressing (Reg16 (GR BX)) (Reg16 (PR SI)))) -> 7
+  (IRA (IndexRegisterAddressing (Reg16 (PR BP)) (Reg16 (PR SI)))) -> 8
+  (IRA (IndexRegisterAddressing (Reg16 (GR BX)) (Reg16 (PR DI)))) -> 8
+  (IROA (IndexRegisterOffsetAddressing _ (Reg16 (PR BP)) (Reg16 (PR DI)))) -> 11
+  (IROA (IndexRegisterOffsetAddressing _ (Reg16 (GR BX)) (Reg16 (PR SI)))) -> 11
+  (IROA (IndexRegisterOffsetAddressing _ (Reg16 (PR BP)) (Reg16 (PR SI)))) -> 12
+  (IROA (IndexRegisterOffsetAddressing _ (Reg16 (GR BX)) (Reg16 (PR DI)))) -> 12
+
+clocksMap :: Instr -> Int
 clocksMap instr = case instr of
   -- MOV
-  I2 MOV (OPM _) (OPR (Reg16 AX))          -> 10 :+ 0
-  I2 MOV (OPM _) (OPR (Reg8 AL))           -> 10 :+ 0
-  I2 MOV (OPR (Reg16 AX)) (OPM _)          -> 10 :+ 0
-  I2 MOV (OPR (Reg8 AL)) (OPM _)           -> 10 :+ 0
-  I2 MOV (OPR (SegReg _)) (OPR (Reg16 _))  -> 2 :+ 0
-  I2 MOV (OPR (SegReg _)) (OPM _)          -> 8 :+ 1
-  I2 MOV (OPR (Reg16 _)) (OPR (SegReg _))  -> 2 :+ 0
-  I2 MOV (OPM _) (OPR (SegReg _))          -> 9 :+ 1
-  I2 MOV (OPR _) (OPR _)                   -> 2 :+ 0
-  I2 MOV (OPR _) (OPM _)                   -> 8 :+ 1
-  I2 MOV (OPM _) (OPR _)                   -> 9 :+ 1
-  I2 MOV (OPR _) (OPI _)                   -> 4 :+ 0
-  I2 MOV (OPM _) (OPI _)                   -> 10 :+ 1
+  I2 MOV (OPM _) (OPR (Reg16 (GR AX)))          -> 10
+  I2 MOV (OPM _) (OPR (Reg8 AL))                -> 10
+  I2 MOV (OPR (Reg16 (GR AX))) (OPM _)          -> 10
+  I2 MOV (OPR (Reg8 AL)) (OPM _)                -> 10
+  I2 MOV (OPR (Reg16 (SR _))) (OPR (Reg16 _))   -> 2
+  I2 MOV (OPR (Reg16 (SR _))) (OPM a)           -> 8 + ea a
+  I2 MOV (OPR (Reg16 _)) (OPR (Reg16 (SR _)))   -> 2
+  I2 MOV (OPM a) (OPR (Reg16 (SR _)))           -> 9 + ea a
+  I2 MOV (OPR _) (OPR _)                        -> 2
+  I2 MOV (OPR _) (OPM a)                        -> 8 + ea a
+  I2 MOV (OPM a) (OPR _)                        -> 9 + ea a
+  I2 MOV (OPR _) (OPI _)                        -> 4
+  I2 MOV (OPM a) (OPI _)                        -> 10 + ea a
   -- XCHG
-  I2 XCHG (OPR (Reg8 AL)) (OPR (Reg16 _))  -> 3 :+ 0
-  I2 XCHG (OPR (Reg16 AX)) (OPR (Reg16 _)) -> 3 :+ 0
-  I2 XCHG (OPM _) (OPR _)                  -> 17 :+ 1
-  I2 XCHG (OPR _) (OPR _)                  -> 4 :+ 0
+  I2 XCHG (OPR (Reg8 AL)) (OPR (Reg16 _))       -> 3
+  I2 XCHG (OPR (Reg16 (GR AX))) (OPR (Reg16 _)) -> 3
+  I2 XCHG (OPM a) (OPR _)                       -> 17 + ea a
+  I2 XCHG (OPR _) (OPR _)                       -> 4
   -- LEA
-  I2 LEA (OPR (Reg16 _)) (OPM _)           -> 2 :+ 1
+  I2 LEA (OPR (Reg16 _)) (OPM a)                -> 2 + ea a
   -- PUSH
-  I1 PUSH (OPR (SegReg _))                 -> 10 :+ 0
-  I1 PUSH (OPR _)                          -> 11 :+ 0
-  I1 PUSH (OPM _)                          -> 16 :+ 1
+  I1 PUSH (OPR (Reg16 (SR _)))                  -> 10
+  I1 PUSH (OPR _)                               -> 11
+  I1 PUSH (OPM a)                               -> 16 + ea a
   -- POP
-  I1 POP (OPR (SegReg _))                  -> 8 :+ 0
-  I1 POP (OPR _)                           -> 8 :+ 0
-  I1 POP (OPM _)                           -> 17 :+ 1
+  I1 POP (OPR (Reg16 (SR _)))                   -> 8
+  I1 POP (OPR _)                                -> 8
+  I1 POP (OPM a)                                -> 17 + ea a
   -- PUSHF
-  I0 PUSHF                                 -> 10 :+ 0
+  I0 PUSHF                                      -> 10
   -- POPF
-  I0 POPF                                  -> 8 :+ 0
+  I0 POPF                                       -> 8
   -- XLAT
-  I1 XLAT (OPM _)                          -> 11 :+ 0
+  I1 XLAT (OPM _)                               -> 11
   -- ADD
-  I2 ADD (OPR (Reg8 AL)) (OPI _)           -> 4 :+ 0
-  I2 ADD (OPR (Reg16 AX)) (OPI _)          -> 4 :+ 0
-  I2 ADD (OPM _) (OPI _)                   -> 17 :+ 1
-  I2 ADD (OPR _) (OPI _)                   -> 4 :+ 0
-  I2 ADD (OPM _) (OPR _)                   -> 16 :+ 1
-  I2 ADD (OPR _) (OPM _)                   -> 9 :+ 1
-  I2 ADD (OPR _) (OPR _)                   -> 3 :+ 0
+  I2 ADD (OPR (Reg8 AL)) (OPI _)                -> 4
+  I2 ADD (OPR (Reg16 (GR AX))) (OPI _)          -> 4
+  I2 ADD (OPM a) (OPI _)                        -> 17 + ea a
+  I2 ADD (OPR _) (OPI _)                        -> 4
+  I2 ADD (OPM a) (OPR _)                        -> 16 + ea a
+  I2 ADD (OPR _) (OPM a)                        -> 9 + ea a
+  I2 ADD (OPR _) (OPR _)                        -> 3
   -- ADC
-  I2 ADC (OPR (Reg8 AL)) (OPI _)           -> 4 :+ 0
-  I2 ADC (OPR (Reg16 AX)) (OPI _)          -> 4 :+ 0
-  I2 ADC (OPM _) (OPI _)                   -> 17 :+ 1
-  I2 ADC (OPR _) (OPI _)                   -> 4 :+ 0
-  I2 ADC (OPM _) (OPR _)                   -> 16 :+ 1
-  I2 ADC (OPR _) (OPM _)                   -> 9 :+ 1
-  I2 ADC (OPR _) (OPR _)                   -> 3 :+ 0
+  I2 ADC (OPR (Reg8 AL)) (OPI _)                -> 4
+  I2 ADC (OPR (Reg16 (GR AX))) (OPI _)          -> 4
+  I2 ADC (OPM a) (OPI _)                        -> 17 + ea a
+  I2 ADC (OPR _) (OPI _)                        -> 4
+  I2 ADC (OPM a) (OPR _)                        -> 16 + ea a
+  I2 ADC (OPR _) (OPM a)                        -> 9 + ea a
+  I2 ADC (OPR _) (OPR _)                        -> 3
   -- SUB
-  I2 SUB (OPR (Reg8 AL)) (OPI _)           -> 4 :+ 0
-  I2 SUB (OPR (Reg16 AX)) (OPI _)          -> 4 :+ 0
-  I2 SUB (OPR _) (OPI _)                   -> 4 :+ 0
-  I2 SUB (OPM _) (OPI _)                   -> 17 :+ 1
-  I2 SUB (OPR _) (OPR _)                   -> 3 :+ 0
-  I2 SUB (OPR _) (OPM _)                   -> 9 :+ 1
-  I2 SUB (OPM _) (OPR _)                   -> 16 :+ 1
+  I2 SUB (OPR (Reg8 AL)) (OPI _)                -> 4
+  I2 SUB (OPR (Reg16 (GR AX))) (OPI _)          -> 4
+  I2 SUB (OPR _) (OPI _)                        -> 4
+  I2 SUB (OPM a) (OPI _)                        -> 17 + ea a
+  I2 SUB (OPR _) (OPR _)                        -> 3
+  I2 SUB (OPR _) (OPM a)                        -> 9 + ea a
+  I2 SUB (OPM a) (OPR _)                        -> 16 + ea a
   -- SBB
-  I2 SBB (OPR (Reg8 AL)) (OPI _)           -> 4 :+ 0
-  I2 SBB (OPR (Reg16 AX)) (OPI _)          -> 4 :+ 0
-  I2 SBB (OPR _) (OPI _)                   -> 4 :+ 0
-  I2 SBB (OPM _) (OPI _)                   -> 17 :+ 1
-  I2 SBB (OPM _) (OPR _)                   -> 16 :+ 1
-  I2 SBB (OPR _) (OPM _)                   -> 9 :+ 1
-  I2 SBB (OPR _) (OPR _)                   -> 3 :+ 0
+  I2 SBB (OPR (Reg8 AL)) (OPI _)                -> 4
+  I2 SBB (OPR (Reg16 (GR AX))) (OPI _)          -> 4
+  I2 SBB (OPR _) (OPI _)                        -> 4
+  I2 SBB (OPM a) (OPI _)                        -> 17 + ea a
+  I2 SBB (OPM a) (OPR _)                        -> 16 + ea a
+  I2 SBB (OPR _) (OPM a)                        -> 9 + ea a
+  I2 SBB (OPR _) (OPR _)                        -> 3
   -- IMUL
-  I1 IMUL (OPR (Reg8 _))                   -> 80 :+ 0
-  I1 IMUL (OPR (Reg16 _))                  -> 128 :+ 0
-  I1 IMUL (OPM _)                          -> 86 :+ 1
+  I1 IMUL (OPR (Reg8 _))                        -> 98
+  I1 IMUL (OPR (Reg16 _))                       -> 154
+  I1 IMUL (OPM a)                               -> 104 + ea a
   -- MUL
-  I1 MUL (OPR (Reg8 _))                    -> 70 :+ 0
-  I1 MUL (OPR (Reg16 _))                   -> 118 :+ 0
-  I1 MUL (OPM _)                           -> 76 :+ 1
+  I1 MUL (OPR (Reg8 _))                         -> 77
+  I1 MUL (OPR (Reg16 _))                        -> 133
+  I1 MUL (OPM a)                                -> 139 + ea a
   -- IDIV
-  I1 IDIV (OPR (Reg8 _))                   -> 101 :+ 0
-  I1 IDIV (OPR (Reg16 _))                  -> 165 :+ 0
-  I1 IDIV (OPM _)                          -> 107 :+ 1
+  I1 IDIV (OPR (Reg8 _))                        -> 112
+  I1 IDIV (OPR (Reg16 _))                       -> 184
+  I1 IDIV (OPM a)                               -> 190 + ea a
   -- DIV
-  I1 DIV (OPR (Reg8 _))                    -> 80 :+ 0
-  I1 DIV (OPR (Reg16 _))                   -> 144 :+ 0
-  I1 DIV (OPM _)                           -> 86 :+ 1
+  I1 DIV (OPR (Reg8 _))                         -> 90
+  I1 DIV (OPR (Reg16 _))                        -> 162
+  I1 DIV (OPM a)                                -> 168 + ea a
   -- CBW
-  I0 CBW                                   -> 2 :+ 0
+  I0 CBW                                        -> 2
   -- CWD
-  I0 CWD                                   -> 5 :+ 0
+  I0 CWD                                        -> 5
   -- NEG
-  I1 NEG (OPR _)                           -> 3 :+ 0
-  I1 NEG (OPM _)                           -> 16 :+ 1
+  I1 NEG (OPR _)                                -> 3
+  I1 NEG (OPM a)                                -> 16 + ea a
   -- NOT
-  I1 NOT (OPR _)                           -> 3 :+ 0
-  I1 NOT (OPM _)                           -> 16 :+ 1
+  I1 NOT (OPR _)                                -> 3
+  I1 NOT (OPM a)                                -> 16 + ea a
   -- INC
-  I1 INC (OPR (Reg8 _))                    -> 3 :+ 0
-  I1 INC (OPR (Reg16 _))                   -> 2 :+ 0
-  I1 INC (OPM _)                           -> 15 :+ 1
+  I1 INC (OPR (Reg8 _))                         -> 3
+  I1 INC (OPR (Reg16 _))                        -> 2
+  I1 INC (OPM a)                                -> 15 + ea a
   -- DEC
-  I1 DEC (OPR (Reg8 _))                    -> 3 :+ 0
-  I1 DEC (OPR (Reg16 _))                   -> 2 :+ 0
-  I1 DEC (OPM _)                           -> 15 :+ 1
+  I1 DEC (OPR (Reg8 _))                         -> 3
+  I1 DEC (OPR (Reg16 _))                        -> 2
+  I1 DEC (OPM a)                                -> 15 + ea a
   -- AND
-  I2 AND (OPR (Reg8 AL)) (OPI _)           -> 4 :+ 0
-  I2 AND (OPR (Reg16 AX)) (OPI _)          -> 4 :+ 0
-  I2 AND (OPM _) (OPI _)                   -> 17 :+ 1
-  I2 AND (OPR _) (OPI _)                   -> 4 :+ 0
-  I2 AND (OPM _) (OPR _)                   -> 16 :+ 1
-  I2 AND (OPR _) (OPM _)                   -> 9 :+ 1
-  I2 AND (OPR _) (OPR _)                   -> 3 :+ 0
+  I2 AND (OPR (Reg8 AL)) (OPI _)                -> 4
+  I2 AND (OPR (Reg16 (GR AX))) (OPI _)          -> 4
+  I2 AND (OPM a) (OPI _)                        -> 17 + ea a
+  I2 AND (OPR _) (OPI _)                        -> 4
+  I2 AND (OPM a) (OPR _)                        -> 16 + ea a
+  I2 AND (OPR _) (OPM a)                        -> 9 + ea a
+  I2 AND (OPR _) (OPR _)                        -> 3
   -- OR
-  I2 OR (OPR (Reg8 AL)) (OPI _)            -> 4 :+ 0
-  I2 OR (OPR (Reg16 AX)) (OPI _)           -> 4 :+ 0
-  I2 OR (OPM _) (OPI _)                    -> 17 :+ 1
-  I2 OR (OPR _) (OPI _)                    -> 4 :+ 0
-  I2 OR (OPM _) (OPR _)                    -> 16 :+ 1
-  I2 OR (OPR _) (OPM _)                    -> 9 :+ 1
-  I2 OR (OPR _) (OPR _)                    -> 3 :+ 0
+  I2 OR (OPR (Reg8 AL)) (OPI _)                 -> 4
+  I2 OR (OPR (Reg16 (GR AX))) (OPI _)           -> 4
+  I2 OR (OPM a) (OPI _)                         -> 17 + ea a
+  I2 OR (OPR _) (OPI _)                         -> 4
+  I2 OR (OPM a) (OPR _)                         -> 16 + ea a
+  I2 OR (OPR _) (OPM a)                         -> 9 + ea a
+  I2 OR (OPR _) (OPR _)                         -> 3
   -- XOR
-  I2 XOR (OPR (Reg8 AL)) (OPI _)           -> 4 :+ 0
-  I2 XOR (OPR (Reg16 AX)) (OPI _)          -> 4 :+ 0
-  I2 XOR (OPM _) (OPI _)                   -> 17 :+ 1
-  I2 XOR (OPR _) (OPI _)                   -> 4 :+ 0
-  I2 XOR (OPM _) (OPR _)                   -> 16 :+ 1
-  I2 XOR (OPR _) (OPM _)                   -> 9 :+ 1
-  I2 XOR (OPR _) (OPR _)                   -> 3 :+ 0
+  I2 XOR (OPR (Reg8 AL)) (OPI _)                -> 4
+  I2 XOR (OPR (Reg16 (GR AX))) (OPI _)          -> 4
+  I2 XOR (OPM a) (OPI _)                        -> 17 + ea a
+  I2 XOR (OPR _) (OPI _)                        -> 4
+  I2 XOR (OPM a) (OPR _)                        -> 16 + ea a
+  I2 XOR (OPR _) (OPM a)                        -> 9 + ea a
+  I2 XOR (OPR _) (OPR _)                        -> 3
   -- SHR
-  I2 SHR (OPR _) (OPI 1)                   -> 2 :+ 0
-  I2 SHR (OPR _) (OPR (Reg8 CL))           -> 8 :+ 0
-  I2 SHR (OPM _) (OPI 1)                   -> 15 :+ 1
-  I2 SHR (OPM _) (OPR (Reg8 CL))           -> 20 :+ 1
+  I2 SHR (OPR _) (OPI 1)                        -> 2
+  I2 SHR (OPR _) (OPR (Reg8 CL))                -> 8
+  I2 SHR (OPM a) (OPI 1)                        -> 15 + ea a
+  I2 SHR (OPM a) (OPR (Reg8 CL))                -> 20 + ea a
   -- SAR
-  I2 SAR (OPR _) (OPI 1)                   -> 2 :+ 0
-  I2 SAR (OPR _) (OPR (Reg8 CL))           -> 8 :+ 0
-  I2 SAR (OPM _) (OPI 1)                   -> 15 :+ 1
-  I2 SAR (OPM _) (OPR (Reg8 CL))           -> 20 :+ 1
+  I2 SAR (OPR _) (OPI 1)                        -> 2
+  I2 SAR (OPR _) (OPR (Reg8 CL))                -> 8
+  I2 SAR (OPM a) (OPI 1)                        -> 15 + ea a
+  I2 SAR (OPM a) (OPR (Reg8 CL))                -> 20 + ea a
   -- SHL
-  I2 SHL (OPR _) (OPI 1)                   -> 2 :+ 0
-  I2 SHL (OPR _) (OPR (Reg8 CL))           -> 8 :+ 0
-  I2 SHL (OPM _) (OPI 1)                   -> 15 :+ 1
-  I2 SHL (OPM _) (OPR (Reg8 CL))           -> 20 :+ 1
+  I2 SHL (OPR _) (OPI 1)                        -> 2
+  I2 SHL (OPR _) (OPR (Reg8 CL))                -> 8
+  I2 SHL (OPM a) (OPI 1)                        -> 15 + ea a
+  I2 SHL (OPM a) (OPR (Reg8 CL))                -> 20 + ea a
   -- ROL
-  I2 ROL (OPR _) (OPI 1)                   -> 2 :+ 0
-  I2 ROL (OPR _) (OPR (Reg8 CL))           -> 8 :+ 0
-  I2 ROL (OPM _) (OPI 1)                   -> 15 :+ 1
-  I2 ROL (OPM _) (OPR (Reg8 CL))           -> 20 :+ 1
+  I2 ROL (OPR _) (OPI 1)                        -> 2
+  I2 ROL (OPR _) (OPR (Reg8 CL))                -> 8
+  I2 ROL (OPM a) (OPI 1)                        -> 15 + ea a
+  I2 ROL (OPM a) (OPR (Reg8 CL))                -> 20 + ea a
   -- ROR
-  I2 ROR (OPR _) (OPI 1)                   -> 2 :+ 0
-  I2 ROR (OPR _) (OPR (Reg8 CL))           -> 8 :+ 0
-  I2 ROR (OPM _) (OPI 1)                   -> 15 :+ 1
-  I2 ROR (OPM _) (OPR (Reg8 CL))           -> 20 :+ 1
+  I2 ROR (OPR _) (OPI 1)                        -> 2
+  I2 ROR (OPR _) (OPR (Reg8 CL))                -> 8
+  I2 ROR (OPM a) (OPI 1)                        -> 15 + ea a
+  I2 ROR (OPM a) (OPR (Reg8 CL))                -> 20 + ea a
   -- RCL
-  I2 RCL (OPR _) (OPI 1)                   -> 2 :+ 0
-  I2 RCL (OPR _) (OPR (Reg8 CL))           -> 8 :+ 0
-  I2 RCL (OPM _) (OPI 1)                   -> 15 :+ 1
-  I2 RCL (OPM _) (OPR (Reg8 CL))           -> 20 :+ 1
+  I2 RCL (OPR _) (OPI 1)                        -> 2
+  I2 RCL (OPR _) (OPR (Reg8 CL))                -> 8
+  I2 RCL (OPM a) (OPI 1)                        -> 15 + ea a
+  I2 RCL (OPM a) (OPR (Reg8 CL))                -> 20 + ea a
   -- RCR
-  I2 RCR (OPR _) (OPI 1)                   -> 2 :+ 0
-  I2 RCR (OPR _) (OPR (Reg8 CL))           -> 8 :+ 0
-  I2 RCR (OPM _) (OPI 1)                   -> 15 :+ 1
-  I2 RCR (OPM _) (OPR (Reg8 CL))           -> 20 :+ 1
+  I2 RCR (OPR _) (OPI 1)                        -> 2
+  I2 RCR (OPR _) (OPR (Reg8 CL))                -> 8
+  I2 RCR (OPM a) (OPI 1)                        -> 15 + ea a
+  I2 RCR (OPM a) (OPR (Reg8 CL))                -> 20 + ea a
   -- TEST
-  I2 TEST (OPR (Reg8 AL)) (OPI _)          -> 4 :+ 0
-  I2 TEST (OPR (Reg16 AX)) (OPI _)         -> 4 :+ 0
-  I2 TEST (OPM _) (OPI _)                  -> 11 :+ 1
-  I2 TEST (OPR _) (OPI _)                  -> 5 :+ 0
-  I2 TEST (OPR _) (OPM _)                  -> 9 :+ 1
-  I2 TEST (OPR _) (OPR _)                  -> 3 :+ 0
+  I2 TEST (OPR (Reg8 AL)) (OPI _)               -> 4
+  I2 TEST (OPR (Reg16 (GR AX))) (OPI _)         -> 4
+  I2 TEST (OPM a) (OPI _)                       -> 11 + ea a
+  I2 TEST (OPR _) (OPI _)                       -> 5
+  I2 TEST (OPR _) (OPM a)                       -> 9 + ea a
+  I2 TEST (OPR _) (OPR _)                       -> 3
   -- CMP
-  I2 CMP (OPR (Reg8 AL)) (OPI _)           -> 4 :+ 0
-  I2 CMP (OPR (Reg16 AX)) (OPI _)          -> 4 :+ 0
-  I2 CMP (OPM _) (OPI _)                   -> 10 :+ 1
-  I2 CMP (OPR _) (OPI _)                   -> 4 :+ 0
-  I2 CMP (OPM _) (OPR _)                   -> 9 :+ 1
-  I2 CMP (OPR _) (OPM _)                   -> 9 :+ 1
-  I2 CMP (OPR _) (OPR _)                   -> 3 :+ 0
+  I2 CMP (OPR (Reg8 AL)) (OPI _)                -> 4
+  I2 CMP (OPR (Reg16 (GR AX))) (OPI _)          -> 4
+  I2 CMP (OPM a) (OPI _)                        -> 10 + ea a
+  I2 CMP (OPR _) (OPI _)                        -> 4
+  I2 CMP (OPM a) (OPR _)                        -> 9 + ea a
+  I2 CMP (OPR _) (OPM a)                        -> 9 + ea a
+  I2 CMP (OPR _) (OPR _)                        -> 3
   -- STD
-  I0 STD                                   -> 2 :+ 0
+  I0 STD                                        -> 2
   -- CLD
-  I0 CLD                                   -> 2 :+ 0
+  I0 CLD                                        -> 2
   -- STC
-  I0 STC                                   -> 2 :+ 0
+  I0 STC                                        -> 2
   -- CLC
-  I0 CLC                                   -> 2 :+ 0
+  I0 CLC                                        -> 2
   -- CMC
-  I0 CMC                                   -> 2 :+ 0
+  I0 CMC                                        -> 2
   -- LOOP
   --I1 LOOP (OPM _) -> 17 :+ 0
   -- LOOPZ
@@ -514,34 +539,34 @@ clocksMap instr = case instr of
   -- LOOPNZ
   --I1 LOOPNZ (OPM _) -> 19 :+ 0
   -- REP
-  I0 REP                                   -> 2 :+ 0
+  I0 REP                                        -> 2
   -- MOVS
-  I2 MOVS (OPM _) (OPM _)                  -> 18 :+ 0
+  I2 MOVS (OPM _) (OPM _)                       -> 18
   -- LODS
-  I1 LODS (OPM _)                          -> 12 :+ 0
+  I1 LODS (OPM _)                               -> 12
   -- STOS
-  I1 STOS (OPM _)                          -> 11 :+ 0
+  I1 STOS (OPM _)                               -> 11
   -- SCAS
-  I1 SCAS (OPM _)                          -> 15 :+ 0
+  I1 SCAS (OPM _)                               -> 15
   -- CMPS
-  I2 CMPS (OPM _) (OPM _)                  -> 22 :+ 0
+  I2 CMPS (OPM _) (OPM _)                       -> 22
   -- JCC
   --skip
   -- JMP
   --skip
   -- CALL
-  I1 CALL (OPR _)                          -> 16 :+ 0
-  I1 CALL (OPM _)                          -> 21 :+ 1
+  I1 CALL (OPR _)                               -> 16
+  I1 CALL (OPM a)                               -> 21 + ea a
   -- RET
   --skip
   -- SYS
   --skip
-  _                                        -> error "wrong arguments"
+  _                                             -> error "wrong arguments"
 
-countClocks :: [Instr] -> Clocks Int
-countClocks = foldr fun (0 :+ 0)
+countClocks :: [Instr] -> Int
+countClocks = foldr fun 0
   where
-    fun val acc = acc <> clocksMap val
+    fun val acc = acc + clocksMap val
 
 countClocksFromParsedFile fn = do
   cont <- parseFromFile parseFile fn
