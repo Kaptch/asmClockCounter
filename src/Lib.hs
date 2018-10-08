@@ -313,25 +313,7 @@ parseFile = do
     newline
     Lib.whiteSpace
     many parseStmt
-
-{- DA DirectAddressing | IA IndirectAddressing | ROA RegisterOffsetAddressing
-            | IRA IndexRegisterAddressing | IROA IndexRegisterOffsetAddressing
-
-            newtype DirectAddressing = DirectAddressing String
-                deriving (Show, Eq)
-
-            newtype IndirectAddressing = IndirectAddressing Reg
-                deriving (Show, Eq)
-
-            data RegisterOffsetAddressing = RegisterOffsetAddressing Integer Reg
-                deriving (Show, Eq)
-
-            data IndexRegisterAddressing = IndexRegisterAddressing Reg Reg
-                deriving (Show, Eq)
-
-            data IndexRegisterOffsetAddressing = IndexRegisterOffsetAddressing Integer Reg Reg
-                deriving (Show, Eq)
-          -}
+    
 ea a = case a of
   (DA _) -> 6
   (IA _) -> 5
