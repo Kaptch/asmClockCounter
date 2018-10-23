@@ -1,7 +1,11 @@
+; comment
+_PRINTF = 127
+  _EXIT = 1 ; dgdgd
+  ;dghf
 .SECT .TEXT
         MOV     AX, (x)
-        ADD     AX, (y)
-        MOV     SI, arr
+        ADD     AX, (y) ; some comment
+        MOV     SI, arr ;;
         add     si, 3
         add     cx, (arr+2)
         add     AX, -2(SI)
