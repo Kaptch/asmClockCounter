@@ -309,11 +309,10 @@ parseStmt = do
 
 parseFile = do
     Lib.whiteSpace
-    string ".SECT .TEXT"
-    newline
+    manyTill anyChar (Text.Parsec.try (string ".SECT .TEXT"))
     Lib.whiteSpace
     many parseStmt
-    
+
 ea a = case a of
   (DA _) -> 6
   (IA _) -> 5
@@ -543,7 +542,7 @@ clocksMap instr = case instr of
   --skip
   -- SYS
   --skip
-  _                                             -> error "wrong arguments"
+  _                                             -> 0 -- in order to process other instructions 
 
 countClocks :: [Instr] -> Int
 countClocks = foldr fun 0
