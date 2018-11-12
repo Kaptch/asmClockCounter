@@ -6,8 +6,8 @@ import qualified Data.Map.Strict               as Map
 import           Text.Parsec
 import           Text.Parsec.Language
 import           Text.Parsec.String
-import           Text.Parsec.Token
-import           Text.ParserCombinators.Parsec
+import qualified Text.Parsec.Token             as Token
+import           Text.ParserCombinators.Parsec hiding (try)
 
 data OpCode = MOV | XCHG | LEA | PUSH | POP
             | PUSHF | POPF | XLAT | ADD | ADC
@@ -62,7 +62,7 @@ data Memory = DA DirectAddressing | IA IndirectAddressing | ROA RegisterOffsetAd
             | IRA IndexRegisterAddressing | IROA IndexRegisterOffsetAddressing
     deriving (Show, Eq)
 
-data Oper = OPR Reg | OPM Memory | OPI Integer
+data Oper = OPR Reg | OPM Memory | OPI Integer | LBL String
     deriving (Show, Eq)
 
 data Instr = I0 OpCode
@@ -221,96 +221,85 @@ arity =
     ]
 
 asmDef = emptyDef
-    { commentLine = ";"
-    , identStart = letter
-    , identLetter = alphaNum <|> oneOf "+-"
-    , caseSensitive = False
+    { Token.commentLine = ";"
+    , Token.identStart = letter
+    , Token.identLetter = alphaNum <|> oneOf "+-"
+    , Token.caseSensitive = False
     }
 
-lexer = makeTokenParser asmDef
-identifier = Text.Parsec.Token.identifier lexer -- parses an identifier
-parens     = Text.Parsec.Token.parens     lexer -- parses surrounding parenthesis:
-                                                -- parens p
-                                                -- takes care of the parenthesis and
-                                                -- uses p to parse what's inside them
-integer    = Text.Parsec.Token.integer    lexer -- parses an integer
-semi       = Text.Parsec.Token.semi       lexer -- parses a semicolon
-whiteSpace = Text.Parsec.Token.whiteSpace lexer -- parses whitespace
-comma      = Text.Parsec.Token.comma      lexer -- parses comma
-symbol     = Text.Parsec.Token.symbol     lexer -- parses symbol
+lexer = Token.makeTokenParser asmDef
+identifier = Token.identifier lexer
+parens     = Token.parens     lexer
+integer    = Token.integer    lexer
+semi       = Token.semi       lexer
+whiteSpace = Token.whiteSpace lexer
+comma      = Token.comma      lexer
+symbol     = Token.symbol     lexer
 
-parseInstr = foldl1 (<|>) (map f idToInstrTable)
-    where
-        f (name, proxy) = reserved lexer name >> return proxy
+regToVal (name, proxy) = Token.reserved lexer name >> return proxy
 
-parseReg16 = foldl1 (<|>) (map f idToReg16Table)
-    where
-        f (name, proxy) = reserved lexer name >> return proxy
+parseInstr = foldl1 (<|>) (map regToVal idToInstrTable)
 
-parseReg8 = foldl1 (<|>) (map f idToReg8Table)
-    where
-        f (name, proxy) = reserved lexer name >> return proxy
+parseReg16 = foldl1 (<|>) (map regToVal idToReg16Table)
 
-parseSegReg = foldl1 (<|>) (map f idToSegRegTable)
-    where
-        f (name, proxy) = reserved lexer name >> return proxy
+parseReg8 = foldl1 (<|>) (map regToVal idToReg8Table)
 
-parsePointerReg = foldl1 (<|>) (map f idToPointerRegTable)
-    where
-        f (name, proxy) = reserved lexer name >> return proxy
+parseSegReg = foldl1 (<|>) (map regToVal idToSegRegTable)
+
+parsePointerReg = foldl1 (<|>) (map regToVal idToPointerRegTable)
 
 parseReg = (Reg16 . GR <$> parseReg16) <|> (Reg8 <$> parseReg8)
         <|> (Reg16 . SR <$> parseSegReg) <|> (Reg16 . PR <$> parsePointerReg)
 
-appendBrackets str = "(" ++ str ++ ")"
+appendBrackets str = '(' : str ++ ")"
 
 parseDirectAddressing = do
-    str <- Lib.identifier <|> (appendBrackets <$> Lib.parens Lib.identifier)
-                          <|> (appendBrackets <$> (show <$> Lib.parens Lib.integer))
+    str <- identifier <|> (appendBrackets <$> parens identifier)
+                    <|> (appendBrackets <$> (show <$> parens integer))
     return $ DirectAddressing str
 
-parseIndirectAddressing = IndirectAddressing <$> Lib.parens parseReg
+parseIndirectAddressing = IndirectAddressing <$> parens parseReg
 
 parseRegisterOffsetAddressing = do
-    offset <- Lib.integer
-    address <- Lib.parens parseReg
+    offset <- integer
+    address <- parens parseReg
     return $ RegisterOffsetAddressing offset address
 
 parseIndexRegisterAddressing = do
-    index <- Lib.parens parseReg
-    address <- Lib.parens parseReg
+    index <- parens parseReg
+    address <- parens parseReg
     return $ IndexRegisterAddressing index address
 
 parseIndexRegisterOffsetAddressing = do
-    offset <- Lib.integer
-    index <- Lib.parens parseReg
-    address <- Lib.parens parseReg
+    offset <- integer
+    index <- parens parseReg
+    address <- parens parseReg
     return $ IndexRegisterOffsetAddressing offset index address
 
-parseMemory = (IRA <$> Text.Parsec.try parseIndexRegisterAddressing)
-           <|> (IROA <$> Text.Parsec.try parseIndexRegisterOffsetAddressing)
-           <|> (IA <$> Text.Parsec.try parseIndirectAddressing)
-           <|> (ROA <$> Text.Parsec.try parseRegisterOffsetAddressing)
-           <|> (DA <$> Text.Parsec.try parseDirectAddressing)
+parseMemory = (IRA <$> try parseIndexRegisterAddressing)
+           <|> (IROA <$> try parseIndexRegisterOffsetAddressing)
+           <|> (IA <$> try parseIndirectAddressing)
+           <|> (ROA <$> try parseRegisterOffsetAddressing)
+           <|> (DA <$> try parseDirectAddressing)
 
-parseOp = (OPR <$> parseReg) <|> (OPM <$> parseMemory) <|> (OPI <$> Lib.integer)
+parseOp = (OPR <$> parseReg) <|> (OPM <$> parseMemory) <|> (OPI <$> integer)
 
 parseStmt = do
-    Lib.whiteSpace
+    whiteSpace
     instr <- parseInstr
     let ari = lookup instr arity
     case ari of
         Just 0 -> return $ I0 instr
-        Just 1 -> do operands <- commaSep1 lexer parseOp <* Lib.whiteSpace
+        Just 1 -> do operands <- Token.commaSep1 lexer parseOp <* whiteSpace
                      return $ I1 instr (head operands)
-        Just 2 -> do operands <- commaSep1 lexer parseOp <* Lib.whiteSpace
+        Just 2 -> do operands <- Token.commaSep1 lexer parseOp <* whiteSpace
                      return $ I2 instr (head operands) (head . tail $ operands)
         _      -> error ""
 
 parseFile = do
-    Lib.whiteSpace
-    manyTill anyChar (Text.Parsec.try (string ".SECT .TEXT"))
-    Lib.whiteSpace
+    whiteSpace
+    manyTill anyChar (try (string ".SECT .TEXT"))
+    whiteSpace
     many parseStmt
 
 ea a = case a of
@@ -542,7 +531,7 @@ clocksMap instr = case instr of
   --skip
   -- SYS
   --skip
-  _                                             -> 0 -- in order to process other instructions 
+  _                                             -> 0 -- in order to process other instructions
 
 countClocks :: [Instr] -> Int
 countClocks = foldr fun 0
