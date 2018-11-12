@@ -1,13 +1,14 @@
-; comment
+! comment
 _PRINTF = 127
-  _EXIT = 1 ; dgdgd
-  ;dghf
+  _EXIT = 1 ! dgdgd
+  !dghf
 .SECT .TEXT
         MOV     AX, (x)
-        ADD     AX, (y) ; some comment
-        MOV     SI, arr ;;
+        ADD     AX, (y) ! some comment
+        MOV     SI, arr !!
         add     si, 3
-        add     cx, (arr+2)
+        L1: add     cx, (arr+2)
+L2:
         add     AX, -2(SI)
         add     2(BP)(SI), 25
 .SECT .DATA
