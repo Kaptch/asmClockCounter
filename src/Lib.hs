@@ -3,11 +3,11 @@ module Lib where
 import           Data.Char
 import           Data.Functor.Identity
 import qualified Data.Map.Strict               as Map
-import           Text.Parsec
+import           Text.Parsec                   hiding (label)
 import           Text.Parsec.Language
 import           Text.Parsec.String
 import qualified Text.Parsec.Token             as Token
-import           Text.ParserCombinators.Parsec hiding (try)
+import           Text.ParserCombinators.Parsec hiding (label, try)
 
 data OpCode = MOV | XCHG | LEA | PUSH | POP
             | PUSHF | POPF | XLAT | ADD | ADC
@@ -221,8 +221,8 @@ arity =
     ]
 
 asmDef = emptyDef
-    { Token.commentLine = ";"
-    , Token.identStart = letter
+    { Token.commentLine = "!"
+    , Token.identStart = letter <|> char '_'
     , Token.identLetter = alphaNum <|> oneOf "+-"
     , Token.caseSensitive = False
     }
@@ -284,7 +284,11 @@ parseMemory = (IRA <$> try parseIndexRegisterAddressing)
 
 parseOp = (OPR <$> parseReg) <|> (OPM <$> parseMemory) <|> (OPI <$> integer)
 
+label = try $ manyTill alphaNum $ char ':'
+
 parseStmt = do
+    whiteSpace
+    optional label
     whiteSpace
     instr <- parseInstr
     let ari = lookup instr arity
