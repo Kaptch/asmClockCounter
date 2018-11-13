@@ -1,4 +1,4 @@
-! This program prints the string 
+! This program prints the string
 ! "Hello World" on a one byte basis
 ! using a loop and a base pointer address.
 
@@ -9,18 +9,19 @@
 .SECT .TEXT			!  5
 start:				!  6
 	MOV	CX,de-hw	!  7
+	; test comment
 	PUSH	CX		!  8
 	PUSH	1		!  9
 	PUSH	hw		! 10
 	MOV	BP,SP		! 11
 	PUSH	_STDOUT		! 12
 	PUSH	_WRITE		! 13
-1:	SYS			! 14
+L1:	SYS			! 14
 	SUB	AX,SUCCESS	! 15
-	JNE	1f		! 16
+	JNE	L2		! 16
 	INC	(BP)		! 17
-	LOOP	1b		! 18
-1:	SUB	SP,8		! 19
+	LOOP	L1		! 18
+L2:	SUB	SP,8		! 19
 	PUSH	AX		! 20
 	PUSH	_EXIT		! 21
 	SYS			! 22
