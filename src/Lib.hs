@@ -8,6 +8,7 @@ import           Text.Parsec.Language
 import           Text.Parsec.String
 import qualified Text.Parsec.Token             as Token
 import           Text.ParserCombinators.Parsec hiding (label, try)
+import Control.Monad.State
 
 data OpCode = MOV | XCHG | LEA | PUSH | POP
             | PUSHF | POPF | XLAT | ADD | ADC
@@ -19,7 +20,15 @@ data OpCode = MOV | XCHG | LEA | PUSH | POP
             | CLC | CMC | LOOP | LOOPZ
             | LOOPNZ | REP
             | MOVS | LODS | STOS | SCAS | CMPS
-            | JCC | JMP | CALL | RET | SYS
+            | JMP | CALL | RET | SYS
+            | JNA | JBE | JNB | JAE | JNC
+            | JE | JZ | JNLE | JG
+            | JGE | JNL | JO
+            | JS | JCXZ | JB | JNAE
+            | JC | JNBE | JA
+            | JNE | JNZ | JL
+            | JNGE | JLE  | JNG
+            | JNO | JNS
             deriving (Show, Eq)
 
 data GeneralReg = AX | BX | CX | DX
@@ -156,11 +165,37 @@ idToInstrTable =
     , ("STOS", STOS)
     , ("SCAS", SCAS)
     , ("CMPS", CMPS)
-    , ("JCC", JCC)
     , ("JMP", JMP)
     , ("CALL", CALL)
     , ("RET", RET)
     , ("SYS", SYS)
+    , ("JNA", JNA)
+    , ("JBE", JBE)
+    , ("JNB", JNB)
+    , ("JAE", JAE)
+    , ("JNC", JNC)
+    , ("JE", JE)
+    , ("JZ", JZ)
+    , ("JNLE", JNLE)
+    , ("JG", JG)
+    , ("JGE", JGE)
+    , ("JNL", JNL)
+    , ("JO", JO)
+    , ("JS", JS)
+    , ("JCXZ", JCXZ)
+    , ("JB", JB)
+    , ("JNAE", JNAE)
+    , ("JC", JC)
+    , ("JNBE", JNBE)
+    , ("JA", JA)
+    , ("JNE", JNE)
+    , ("JNZ", JNZ)
+    , ("JL", JL)
+    , ("JNGE", JNGE)
+    , ("JLE", JLE)
+    , ("JNG", JNG)
+    , ("JNO", JNO)
+    , ("JNS", JNS)
     ]
 
 arity :: [(OpCode, Int)]
@@ -213,15 +248,41 @@ arity =
     , (STOS, 0)
     , (SCAS, 0)
     , (CMPS, 0)
-    , (JCC, 1)
     , (JMP, 1)
     , (CALL, 1)
     , (RET, 1)
     , (SYS, 0)
+    , (JNA, 1)
+    , (JBE, 1)
+    , (JNB, 1)
+    , (JAE, 1)
+    , (JNC, 1)
+    , (JE, 1)
+    , (JZ, 1)
+    , (JNLE, 1)
+    , (JG, 1)
+    , (JGE, 1)
+    , (JNL, 1)
+    , (JO, 1)
+    , (JS, 1)
+    , (JCXZ, 1)
+    , (JB, 1)
+    , (JNAE, 1)
+    , (JC, 1)
+    , (JNBE, 1)
+    , (JA, 1)
+    , (JNE, 1)
+    , (JNZ, 1)
+    , (JL, 1)
+    , (JNGE, 1)
+    , (JLE, 1)
+    , (JNG, 1)
+    , (JNO, 1)
+    , (JNS, 1)
     ]
 
 asmDef = emptyDef
-    { Token.commentLine = "!"
+    { Token.commentLine = ["!", ";"]
     , Token.identStart = letter <|> char '_'
     , Token.identLetter = alphaNum <|> oneOf "+-"
     , Token.caseSensitive = False
@@ -288,7 +349,7 @@ label = try $ manyTill alphaNum $ char ':'
 
 parseStmt = do
     whiteSpace
-    optional label
+    lbl <- optional label
     whiteSpace
     instr <- parseInstr
     let ari = lookup instr arity
@@ -300,9 +361,21 @@ parseStmt = do
                      return $ I2 instr (head operands) (head . tail $ operands)
         _      -> error ""
 
+parseConst = do
+  whiteSpace
+  name <- identifier
+  whiteSpace
+  char '='
+  whiteSpace
+  val <- integer
+  whiteSpace
+  return (name, val)
+
+parseConstSection = many parseConst
+
 parseFile = do
-    whiteSpace
-    manyTill anyChar (try (string ".SECT .TEXT"))
+    constList <- parseConstSection
+    string ".SECT .TEXT"
     whiteSpace
     many parseStmt
 
@@ -545,3 +618,16 @@ countClocks = foldr fun 0
 countClocksFromParsedFile fn = do
   cont <- parseFromFile parseFile fn
   return $ countClocks <$> cont
+
+verboseOutput :: FilePath -> StateT Int IO ()
+verboseOutput fn = do
+  cont <- lift $ readFile fn
+  mapM_ f (lines cont)
+  s <- get
+  lift $ putStrLn $ "Total: " ++ show s
+    where
+      f val = case parse parseStmt "" val of
+        Left _ -> lift $ putStrLn val
+        Right a -> do
+          lift $ putStrLn $ val ++ " : " ++ show (clocksMap a)
+          modify (+ clocksMap a)
