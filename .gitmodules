@@ -1,0 +1,3 @@
+[submodule "parsec"]
+	path = parsec
+	url = https://github.com/Kaptch/parsec.git
