@@ -1,19 +1,19 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.30.0.
+-- This file has been generated from package.yaml by hpack version 0.31.0.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 5533a64a1e5349c3551a002df9284fad1ed3b3e9093525a4c3c81b584f581f02
+-- hash: 733d688d6d0283eb0a74d4fd3b6e8bb0ae2d24a0983394fae44e67a93867623b
 
 name:           asmClockCounter
 version:        0.1.0.0
 description:    Please see the README on GitHub at <https://github.com/Kaptch/asmClockCounter#readme>
 homepage:       https://github.com/Kaptch/asmClockCounter#readme
 bug-reports:    https://github.com/Kaptch/asmClockCounter/issues
-author:         Kaptch
+author:         Sergey Stepanenko
 maintainer:     kaptch@gmail.com
-copyright:      2018 Kaptch
+copyright:      2018 Sergey Stepanenko
 license:        BSD3
 license-file:   LICENSE
 build-type:     Simple
@@ -33,10 +33,9 @@ library
   hs-source-dirs:
       src
   build-depends:
-      base >=4.7 && <5,
-      mtl,
-      parsec,
-      containers
+      base >=4.7 && <5
+    , containers
+    , mtl
   default-language: Haskell2010
 
 executable asmClockCounter-exe
@@ -49,8 +48,9 @@ executable asmClockCounter-exe
   build-depends:
       asmClockCounter
     , base >=4.7 && <5
+    , containers
+    , mtl
   default-language: Haskell2010
-  extensions: FlexibleContexts
 
 test-suite asmClockCounter-test
   type: exitcode-stdio-1.0
@@ -63,4 +63,6 @@ test-suite asmClockCounter-test
   build-depends:
       asmClockCounter
     , base >=4.7 && <5
+    , containers
+    , mtl
   default-language: Haskell2010
