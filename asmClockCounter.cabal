@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 733d688d6d0283eb0a74d4fd3b6e8bb0ae2d24a0983394fae44e67a93867623b
+-- hash: 75a401befcf210aa0966a12516cc173903dec4fb15cf1ebdd3f69bd6c9488948
 
 name:           asmClockCounter
 version:        0.1.0.0
@@ -36,6 +36,7 @@ library
       base >=4.7 && <5
     , containers
     , mtl
+    , parsec
   default-language: Haskell2010
 
 executable asmClockCounter-exe
@@ -50,6 +51,7 @@ executable asmClockCounter-exe
     , base >=4.7 && <5
     , containers
     , mtl
+    , parsec
   default-language: Haskell2010
 
 test-suite asmClockCounter-test
@@ -65,4 +67,5 @@ test-suite asmClockCounter-test
     , base >=4.7 && <5
     , containers
     , mtl
+    , parsec
   default-language: Haskell2010
