@@ -1,10 +1,10 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.31.0.
+-- This file has been generated from package.yaml by hpack version 0.31.1.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 75a401befcf210aa0966a12516cc173903dec4fb15cf1ebdd3f69bd6c9488948
+-- hash: f622f6ac403c5fadfde87e55b35b011d57ab59c5f0cc8fa773b8af5dab79bb51
 
 name:           asmClockCounter
 version:        0.1.0.0
@@ -33,7 +33,8 @@ library
   hs-source-dirs:
       src
   build-depends:
-      base >=4.7 && <5
+      MissingH
+    , base >=4.7 && <5
     , containers
     , mtl
     , parsec
@@ -47,7 +48,8 @@ executable asmClockCounter-exe
       app
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      asmClockCounter
+      MissingH
+    , asmClockCounter
     , base >=4.7 && <5
     , containers
     , mtl
@@ -63,7 +65,8 @@ test-suite asmClockCounter-test
       test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      asmClockCounter
+      MissingH
+    , asmClockCounter
     , base >=4.7 && <5
     , containers
     , mtl
