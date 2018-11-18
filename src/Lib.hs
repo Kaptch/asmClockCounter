@@ -5,6 +5,7 @@ module Lib where
 import           Control.Monad.State
 import           Data.Char
 import           Data.Functor.Identity
+import           Data.List.Utils               as Utils
 import qualified Data.Map.Strict               as Map
 import           Text.Parsec                   hiding (label)
 import           Text.Parsec.Language
@@ -317,7 +318,8 @@ parseReg = (Reg16 . GR <$> parseReg16) <|> (Reg8 <$> parseReg8)
 appendBrackets str = '(' : str ++ ")"
 
 parseDirectAddressing = do
-    str <- identifier <|> (appendBrackets <$> parens identifier)
+    str <- do { int <- many digit ; letter <- oneOf "bf" ; return $ int ++ [letter] }
+                    <|> identifier <|> (appendBrackets <$> parens identifier)
                     <|> (appendBrackets <$> (show <$> parens integer))
     return $ DirectAddressing str
 
@@ -621,9 +623,22 @@ countClocksFromParsedFile fn = do
   cont <- parseFromFile parseFile fn
   return $ countClocks <$> cont
 
-verboseOutput :: FilePath -> StateT Int IO ()
-verboseOutput fn = do
-  cont <- lift $ readFile fn
+preprocess [] text          = text
+preprocess ((a, b):xs) text = preprocess xs $ replace a (show b) text
+
+verboseProcess :: FilePath -> StateT Int IO ()
+verboseProcess filename = do
+    cont <- liftIO $ readFile filename
+    case parse parseConstSection "" cont of
+        Left _ -> verboseOutput cont
+        Right a -> verboseOutput $ (++) (h ++ ".SECT .TEXT") $ preprocess a $ Utils.join ".SECT .TEXT" t
+            where
+                splitedList = Utils.split ".SECT .TEXT" cont
+                h = head splitedList
+                t = tail splitedList
+
+verboseOutput :: String -> StateT Int IO ()
+verboseOutput cont = do
   mapM_ f (lines cont)
   s <- get
   lift $ putStrLn $ "Total: " ++ show s
@@ -633,3 +648,6 @@ verboseOutput fn = do
         Right a -> do
           lift $ putStrLn $ val ++ " : " ++ show (clocksMap a)
           modify (+ clocksMap a)
+
+runVerbose :: FilePath -> IO ()
+runVerbose fn = runStateT (verboseProcess fn) 0 *> return ()
