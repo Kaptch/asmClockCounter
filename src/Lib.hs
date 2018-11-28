@@ -612,6 +612,8 @@ clocksMap instr = case instr of
   --skip
   -- SYS
   --skip
+  -- PUSH
+  I1 PUSH _                                     -> 16
   _                                             -> 0 -- in order to process other instructions
 
 countClocks :: [Instr] -> Int
