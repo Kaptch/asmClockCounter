@@ -422,6 +422,7 @@ clocksMap instr = case instr of
   -- PUSH
   I1 PUSH (OPR (Reg16 (SR _)))                  -> 10
   I1 PUSH (OPR _)                               -> 11
+  I1 PUSH (OPI _)                               -> 11
   I1 PUSH (OPM a)                               -> 16 + ea a
   -- POP
   I1 POP (OPR (Reg16 (SR _)))                   -> 8
@@ -612,6 +613,33 @@ clocksMap instr = case instr of
   --skip
   -- SYS
   --skip
+  I1 JMP _                                      -> 15
+  I1 JNA _                                      -> 16
+  I1 JBE _                                      -> 16
+  I1 JNB _                                      -> 16
+  I1 JAE _                                      -> 16
+  I1 JNC _                                      -> 16
+  I1 JE _                                       -> 16
+  I1 JNZ _                                      -> 16
+  I1 JNLE _                                     -> 16
+  I1 JG _                                       -> 16
+  I1 JGE _                                      -> 16
+  I1 JNL _                                      -> 16
+  I1 JO _                                       -> 16
+  I1 JS _                                       -> 16
+  I1 JCXZ _                                     -> 16
+  I1 JB _                                       -> 16
+  I1 JNAE _                                     -> 16
+  I1 JC _                                       -> 16
+  I1 JNBE _                                     -> 16
+  I1 JA _                                       -> 16
+  I1 JNE _                                      -> 16
+  I1 JL _                                       -> 16
+  I1 JNGE _                                     -> 16
+  I1 JLE _                                      -> 16
+  I1 JNG _                                      -> 16
+  I1 JNO _                                      -> 16
+  I1 JNS _                                      -> 16
   _                                             -> 0 -- in order to process other instructions
 
 countClocks :: [Instr] -> Int
