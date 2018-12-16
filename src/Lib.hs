@@ -585,11 +585,11 @@ clocksMap instr = case instr of
   -- CMC
   I0 CMC                                        -> 2
   -- LOOP
-  --I1 LOOP (OPM _) -> 17 :+ 0
+  I1 LOOP _                                     -> 17
   -- LOOPZ
-  --I1 LOOPZ (OPM _) -> 18 :+ 0
+  I1 LOOPZ _                                    -> 18
   -- LOOPNZ
-  --I1 LOOPNZ (OPM _) -> 19 :+ 0
+  I1 LOOPNZ _                                   -> 19
   -- REP
   I0 REP                                        -> 2
   -- MOVS
